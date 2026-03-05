@@ -1,0 +1,43 @@
+### Add a new medical note
+POST http://localhost:3000/add-note
+Content-Type: application/json
+
+{
+  "patient": "John Doe",
+  "notes": "CT thorax/abdomen with i.v. CM of 23.12.2008\nClinical information:\nNon-small cell lung carcinoma (adenocarcinoma) of the left upper lobe, ED 09/2008\n- pT1b, pN0(0/9), cM0, R0, Stage IA2\nPD-L1 CPS 25%\nBronchoscopy with EBUS-TBNA and transbronchial biopsy on 01.09.2008\nStaging\nFor comparison, a chest CT from 17.8.2008 and a PET/CT from 16.8.2008 are available.\n\nThe lungs lie on all sides of the thoracic wall, veritable radiation transparency of the lung parenchyma.\nNo evidence of pleural fluid accumulation.\nClammy and scarring changes in the left upper lobe during partial resection.\nUnchanged paraseptal bulla in the right lower lobe with wall thickening.\nNo evidence of new intrapulmonary focal findings or extensive shading in the meantime.\nNo evidence of significantly enlarged mediastinal, hilar or axillary lymph nodes.\nNormal-width mediastinum without evidence of a mass.\nAge-appropriate representation of the large vessels.\nMild coronary sclerosis, no pericardial effusion with normal-sized, medium-sized cor.\n\n\nOsteochondrosis C6/7, otherwise unchanged inconspicuous representation of the bony thorax.\n\nThe liver is smoothly bounded, enlarged (kissing sign) and exhibits homogeneous contrast agent enhancement.\nNo congestion of the intra- or extrahepatic bile ducts.\nWell-filled gallbladder without evidence of intravesical concretions\nProper visualization of the spleen vessels with an inconspicuously large spleen.\nNormal sized, homogeneously structured pancreas; no dilation of the Wirsungianus duct.\nRegular representation of the homogeneously dense, normal-sized adrenal glands.\nThe kidneys are orthotopically located, smoothly bounded with laterally symmetrical contrast medium absorption.\nNo congestion of the urinary tract.\nThe large intra-abdominal vessels are norm-alkaline, no evidence of significantly enlarged lymph nodes.\nInconspicuous gastric presentation, as far as can be assessed without hypotension and bulging filling.\nRegular illustration of the small intestinal loops.\nStool-filled colon.\nWell-filled bladder with smooth outer contours, proper representation of rectum, uterus and adnexa.\nReactive enlarged inguinal lymph nodes up to 0.8 cm short-axis diameter.\nZ. n. dorsal spondylodesis by means of internal fixator from L3 to S1.\nNo screw loosening, no material breakage. \nPEEK cage in the intervertebral space L3/4, titanium cages in the intervertebral spaces L4/5 and L5/S1.\nOtherwise, age-appropriate findings of the skeleton without evidence of osteolysis.\nAssessment:\nPostoperative changes in the case of partial resection of the left upper lobe, currently no indication of filiae.\nSecondary findings hepatomegaly, z. n. dorsal spondylodesis L3-S1.\nOsteochondrosis C6/7.\n"
+}
+
+### Retrieve all notes
+GET http://localhost:3000/get-data
+
+### Retrieve a note by ID
+GET http://localhost:3000/get-data?id=1
+
+### List available Gemini models
+GET http://localhost:3000/list-models
+
+### Update a note (example payload)
+POST http://localhost:3000/write-data
+Content-Type: application/json
+
+{
+  "id": 1,
+  "patient": "John Doe",
+  "notes": "Updated note contents"
+}
+
+### Search/query notes with a natural-language description
+POST http://localhost:3000/query
+Content-Type: application/json
+
+{
+  "text": "Find notes for patient John Doe after 2020 with CT scans"
+}
+
+### Example querying for a specific patient (SQL equivalent: select patient where patient = "John Doe")
+POST http://localhost:3000/query
+Content-Type: application/json
+
+{
+  "text": "select patient where patient = \"John Doe\".  Output remove duplicates, and return json fields with all data "
+}

@@ -1,0 +1,58 @@
+[
+    {
+        "patient": "John Doe",
+        "test": "CT thorax and abdomen with IV contrast",
+        "date": "2008-12-23",
+        "diagnosis": {
+            "primary": "Non-small cell lung carcinoma (adenocarcinoma) of the left upper lobe",
+            "diagnosis_date": "2008-09",
+            "stage": "Stage IA2",
+            "tnm": {
+                "pT": "T1b",
+                "pN": "N0 (0/9)",
+                "cM": "M0",
+                "resection_status": "R0"
+            },
+            "PD_L1_CPS": "25%"
+        },
+        "procedures": [
+            {
+                "procedure": "Bronchoscopy with EBUS-TBNA and transbronchial biopsy",
+                "date": "2008-09-01"
+            }
+        ],
+        "comparison_studies": [
+            {
+                "test": "Chest CT",
+                "date": "2008-08-17"
+            },
+            {
+                "test": "PET/CT",
+                "date": "2008-08-16"
+            }
+        ],
+        "findings": {
+            "lungs": "Postoperative scarring changes in the left upper lobe after partial resection; unchanged paraseptal bulla in the right lower lobe with wall thickening; no new intrapulmonary focal lesions.",
+            "pleura": "No pleural effusion.",
+            "lymph_nodes": "No significantly enlarged mediastinal, hilar, or axillary lymph nodes; reactive inguinal lymph nodes up to 0.8 cm.",
+            "cardiovascular": "Mild coronary sclerosis; no pericardial effusion; normal-sized heart and mediastinum.",
+            "spine_bone": "Osteochondrosis at C6/7; dorsal spondylodesis with internal fixator from L3 to S1 with intact hardware; PEEK cage at L3/4 and titanium cages at L4/5 and L5/S1.",
+            "liver": "Enlarged liver (hepatomegaly) with homogeneous enhancement.",
+            "biliary_system": "No dilation of intra- or extrahepatic bile ducts; gallbladder well filled without stones.",
+            "spleen": "Normal size.",
+            "pancreas": "Normal size and structure; no dilation of the Wirsung duct.",
+            "adrenal_glands": "Normal appearance.",
+            "kidneys": "Orthotopic, normal size, symmetric contrast uptake; no urinary tract obstruction.",
+            "gastrointestinal": "Unremarkable stomach and small bowel; stool-filled colon.",
+            "pelvis": "Well-filled bladder; normal rectum, uterus, and adnexa.",
+            "vessels": "Large intra-abdominal vessels normal caliber."
+        },
+        "assessment": [
+            "Postoperative changes after partial resection of the left upper lobe with no evidence of metastases.",
+            "Hepatomegaly.",
+            "Status post dorsal spondylodesis L3-S1.",
+            "Osteochondrosis C6/7."
+        ],
+        "notes": "Comprehensive CT evaluation of thorax and abdomen demonstrating stable postoperative lung findings without evidence of recurrence or metastasis, with additional findings of hepatomegaly and prior spinal fixation."
+    }
+]
