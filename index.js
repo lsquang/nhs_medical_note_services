@@ -4,7 +4,7 @@ require('dotenv').config({ override: true });
 
 const http = require('http');
 const url = require('url');
-const { addNote, listGeminiModels, searchNotes } = require('./llmHelpers');
+const { addNote, listGeminiModels, searchNotes, connectMongo, mergePatientRecords } = require('./llmHelpers');
 
 
 // In-memory storage for medical notes
@@ -182,6 +182,64 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Scope boundary for merge feature:
+    // - This route must use MongoDB-backed helpers only.
+    // - Do not read from or write to in-memory medicalNotes for merge behavior.
+    if (pathname === '/merge-patient-records' && method === 'POST') {
+        console.log('Incoming POST /merge-patient-records');
+        parseBody(req, async (error, data) => {
+            if (res.headersSent) return;
+            if (error) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ success: false, message: 'Invalid JSON data' }));
+                return;
+            }
+
+            const patientId = data && data.patient_id;
+            const hasDryRun = Object.prototype.hasOwnProperty.call(data || {}, 'dryRun');
+            const dryRun = hasDryRun ? data.dryRun : false;
+
+            if (typeof patientId !== 'string' || patientId.trim() === '') {
+                res.writeHead(400);
+                res.end(JSON.stringify({ success: false, message: 'patient_id is required and must be a string' }));
+                return;
+            }
+            if (hasDryRun && typeof dryRun !== 'boolean') {
+                res.writeHead(400);
+                res.end(JSON.stringify({ success: false, message: 'dryRun must be a boolean when provided' }));
+                return;
+            }
+
+            let client = null;
+            try {
+                const connection = await connectMongo();
+                client = connection.client;
+                const result = await mergePatientRecords(
+                    connection.db,
+                    patientId.trim(),
+                    dryRun
+                );
+
+                const statusCode = result && result.status === 'not-found' ? 404 : 200;
+                res.writeHead(statusCode);
+                res.end(JSON.stringify(result));
+            } catch (err) {
+                console.error('mergePatientRecords error', err);
+                res.writeHead(500);
+                res.end(JSON.stringify({ error: 'internal error' }));
+            } finally {
+                if (client) {
+                    try {
+                        await client.close();
+                    } catch (closeErr) {
+                        console.error('Failed to close MongoDB client', closeErr);
+                    }
+                }
+            }
+        });
+        return;
+    }
+
     // Route not found
     res.writeHead(404);
     res.end(JSON.stringify({ 
@@ -191,7 +249,8 @@ const server = http.createServer(async (req, res) => {
             'POST /add-note - Add a new medical note',
             'GET /get-data - Get all notes or specific note by id query param',
             'POST /write-data - Update an existing note by id',
-            'POST /query - Run LLM-generated MongoDB search and format results'
+            'POST /query - Run LLM-generated MongoDB search and format results',
+            'POST /merge-patient-records - Validate merge contract and call MongoDB merge orchestrator'
         ]
     }));
 });
@@ -204,6 +263,7 @@ server.listen(PORT, () => {
     console.log(`  GET  http://localhost:${PORT}/get-data`);
     console.log(`  POST http://localhost:${PORT}/write-data`);
     console.log(`  POST http://localhost:${PORT}/query`);
+    console.log(`  POST http://localhost:${PORT}/merge-patient-records`);
 });
 
 // Graceful shutdown

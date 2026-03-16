@@ -5,7 +5,9 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test",
+    "test:auto": "./scripts/run-tests.sh",
+    "verify": "npm run test:auto"
   },
   "keywords": [],
   "author": "",
@@ -16,7 +18,7 @@
   },
   "dependencies": {
     "dotenv": "^17.3.1",
-    "gemini-ai": "^2.2.1",
+    "gemini-ai": "^1.1.0",
     "mongodb": "^5.0.0"
   }
 }

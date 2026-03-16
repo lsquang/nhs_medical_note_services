@@ -41,3 +41,154 @@ Content-Type: application/json
 {
   "text": "select patient where patient = \"John Doe\".  Output remove duplicates, and return json fields with all data "
 }
+
+### Merge validation: missing patient_id (expect 400)
+POST http://localhost:3000/merge-patient-records
+Content-Type: application/json
+
+{
+  "dryRun": true
+}
+
+### Merge validation: invalid dryRun type (expect 400)
+POST http://localhost:3000/merge-patient-records
+Content-Type: application/json
+
+{
+  "patient_id": "P-10001",
+  "dryRun": "yes"
+}
+
+### Merge dry-run preview (expect 200 dry-run, no DB writes)
+POST http://localhost:3000/merge-patient-records
+Content-Type: application/json
+
+{
+  "patient_id": "P-10001",
+  "dryRun": true
+}
+
+### Merge live run (expect 200 merged/no-op or 404 not-found depending on DB data)
+POST http://localhost:3000/merge-patient-records
+Content-Type: application/json
+
+{
+  "patient_id": "P-10001",
+  "dryRun": false
+}
+
+### Merge one-match scenario (seed one doc for this patient_id first; expect 200 no-op)
+POST http://localhost:3000/merge-patient-records
+Content-Type: application/json
+
+{
+  "patient_id": "P-SINGLE-DOC",
+  "dryRun": false
+}
+
+### Merge zero-match scenario (expect 404 not-found)
+POST http://localhost:3000/merge-patient-records
+Content-Type: application/json
+
+{
+  "patient_id": "P-NOT-FOUND-0000",
+  "dryRun": false
+}
+
+### Rollback simulation note
+# To simulate rollback, temporarily force an error inside mergePatientRecords
+# after archive insert and before delete, then run a live merge request.
+# Expected: transaction rolls back and medicalNotes/archivedNotes remain unchanged.
+
+### Regression smoke: add-note still works after merge feature
+POST http://localhost:3000/add-note
+Content-Type: application/json
+
+{
+  "patient_id": "REG-P-1",
+  "patient": "Regression Patient",
+  "notes": "Regression smoke note for add/get/write routes"
+}
+
+### Regression smoke: get-data still works after merge feature
+GET http://localhost:3000/get-data
+
+### Regression smoke: write-data still works after merge feature
+POST http://localhost:3000/write-data
+Content-Type: application/json
+
+{
+  "id": 1,
+  "notes": "Regression update"
+}
+
+### Regression smoke: query route still responds after merge feature
+POST http://localhost:3000/query
+Content-Type: application/json
+
+{
+  "text": "Find notes for patient John Doe"
+}
+
+### Seed duplicate record 1 for John Doe
+POST http://localhost:3000/add-note
+Content-Type: application/json
+
+{
+  "patient_id": "JOHN_DOE",
+  "patient": "John Doe",
+  "dob": "1975-05-15",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "diagnosis": {
+    "stage": "I"
+  },
+  "procedures": [
+    {
+      "id": "proc-1",
+      "procedure": "xray"
+    }
+  ],
+  "notes": "Duplicate source note 1"
+}
+
+### Seed duplicate record 2 for John Doe (newer overlap)
+POST http://localhost:3000/add-note
+Content-Type: application/json
+
+{
+  "patient_id": "JOHN_DOE",
+  "patient": "John Doe",
+  "dob": "1975-05-15",
+  "createdAt": "2026-01-02T00:00:00.000Z",
+  "diagnosis": {
+    "stage": "II"
+  },
+  "procedures": [
+    {
+      "id": "proc-1",
+      "procedure": "xray-updated"
+    },
+    {
+      "id": "proc-2",
+      "procedure": "ct"
+    }
+  ],
+  "notes": "Duplicate source note 2"
+}
+
+### Remove duplicate data for patient John Doe
+POST http://localhost:3000/merge-patient-records
+Content-Type: application/json
+
+{
+  "patient_id": "JOHN_DOE",
+  "dryRun": false
+}
+
+### Verify merged result for John Doe
+POST http://localhost:3000/query
+Content-Type: application/json
+
+{
+  "text": "Find notes for patient JOHN_DOE and return full JSON"
+}
