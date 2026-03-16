@@ -332,6 +332,7 @@ async function findAllRecordsForPatient(db, patient_id) {
       }
       return String(a && a._id).localeCompare(String(b && b._id));
     });
+    console.log(`findAllRecordsForPatient: found ${docs.length} records for patient_id ${patient_id}`);
     return docs;
   } catch (error) {
     const err = new Error(`failed to fetch records for patient_id ${patient_id}: ${error.message}`);
