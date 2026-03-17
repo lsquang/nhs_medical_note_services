@@ -245,6 +245,131 @@ function isPlainObject(value) {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * Returns true only when year/month/day form a real Gregorian calendar date.
+ * Uses Date.UTC to avoid local timezone offsets affecting the check.
+ * @param {number} y  Full year (e.g. 2008)
+ * @param {number} m  Month 1–12
+ * @param {number} d  Day 1–31
+ * @returns {boolean}
+ */
+function isValidCalendarDate(y, m, d) {
+  if (m < 1 || m > 12 || d < 1) return false;
+  const check = new Date(Date.UTC(y, m - 1, d));
+  return (
+    check.getUTCFullYear() === y &&
+    check.getUTCMonth() + 1 === m &&
+    check.getUTCDate() === d
+  );
+}
+
+/**
+ * Parses a date string and returns it normalised to "YYYY-MM-DD".
+ * Returns null if the input cannot be parsed as a valid calendar date.
+ *
+ * Supported input formats:
+ *   - YYYY-MM-DD              (stored format, returned unchanged)
+ *   - YYYY-MM-DDTHH:mm:ss...  (ISO 8601 with time — time is stripped)
+ *   - DD/MM/YYYY              (UK NHS format)
+ *   - Natural language        ("Dec 23 2008") — via Date parser fallback
+ *
+ * @param {string} raw
+ * @returns {string|null}  "YYYY-MM-DD" or null
+ */
+function normaliseDate(raw) {
+  if (!raw || typeof raw !== 'string') return null;
+  const s = raw.trim();
+
+  // Pattern 1: YYYY-MM-DD (with optional time component)
+  const isoPattern = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/;
+  const isoMatch = s.match(isoPattern);
+  if (isoMatch) {
+    const [, y, m, d] = isoMatch;
+    return isValidCalendarDate(Number(y), Number(m), Number(d))
+      ? `${y}-${m}-${d}`
+      : null;
+  }
+
+  // Pattern 2: DD/MM/YYYY (UK NHS format)
+  const ukPattern = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+  const ukMatch = s.match(ukPattern);
+  if (ukMatch) {
+    const [, d, m, y] = ukMatch;
+    return isValidCalendarDate(Number(y), Number(m), Number(d))
+      ? `${y}-${m}-${d}`
+      : null;
+  }
+
+  // Pattern 3: Natural language fallback (e.g. "Dec 23 2008")
+  const parsed = new Date(s);
+  if (isNaN(parsed.getTime())) return null;
+  const y = parsed.getUTCFullYear();
+  const m = String(parsed.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(parsed.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Validates and normalises the body payload for POST /update-patient-record.
+ *
+ * On success, returns a normalised object ready for the service layer.
+ * On failure, throws a plain object { statusCode: number, message: string }
+ * so the route handler can write the correct HTTP status without wrapping in Error.
+ *
+ * @param {unknown} data  - Parsed request body (from parseBody)
+ * @returns {{ patient_id: string, date: string, results: object }}
+ * @throws {{ statusCode: number, message: string }}
+ */
+function validateUpdateRequest(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw { statusCode: 400, message: 'Request body must be a JSON object' };
+  }
+
+  // ── patient_id ───────────────────────────────────────────────────────
+  if (typeof data.patient_id !== 'string' || data.patient_id.trim() === '') {
+    throw { statusCode: 400, message: 'patient_id is required and must be a non-empty string' };
+  }
+
+  // ── date ─────────────────────────────────────────────────────────────
+  if (typeof data.date !== 'string' || data.date.trim() === '') {
+    throw { statusCode: 400, message: 'date is required and must be a non-empty string' };
+  }
+  const normalisedDate = normaliseDate(data.date.trim());
+  if (!normalisedDate) {
+    throw {
+      statusCode: 400,
+      message: `date "${data.date}" is not a valid calendar date. Use YYYY-MM-DD format.`,
+    };
+  }
+
+  // ── results ──────────────────────────────────────────────────────────
+  if (
+    !data.results ||
+    typeof data.results !== 'object' ||
+    Array.isArray(data.results) ||
+    Object.keys(data.results).length === 0
+  ) {
+    throw { statusCode: 400, message: 'results is required and must be a non-empty plain object' };
+  }
+
+  // ── protected fields guard ───────────────────────────────────────────
+  const PROTECTED_FIELDS = ['_id', 'patient_id', 'date', 'createdAt'];
+  for (const field of PROTECTED_FIELDS) {
+    if (Object.prototype.hasOwnProperty.call(data.results, field)) {
+      throw {
+        statusCode: 400,
+        message: `results must not include protected field "${field}". It is managed by the system.`,
+      };
+    }
+  }
+
+  return {
+    patient_id: data.patient_id.trim(),
+    date: normalisedDate,
+    results: data.results,
+  };
+}
+
 function dedupeKeyForArrayItem(item) {
   if (!item || typeof item !== 'object') return String(item);
   const idKey = item.id || item._id || item.code;
@@ -691,9 +816,102 @@ async function searchNotes(userText) {
   return { query, docs, formatted };
 }
 
+/**
+ * Finds the first medicalNotes document matching { patient_id, date } and
+ * applies a $set update containing the provided results fields plus updatedAt.
+ *
+ * The caller owns the db connection lifecycle — this function does NOT
+ * open or close the MongoDB client.
+ *
+ * @param {import('mongodb').Db} db         - Active MongoDB db handle
+ * @param {string}               patient_id - Normalised patient identifier (trimmed)
+ * @param {string}               date       - ISO-8601 date string in YYYY-MM-DD format
+ * @param {object}               results    - Caller-supplied fields to update
+ * @returns {Promise<{ status: 'updated', document: object } | { status: 'not-found' }>}
+ * @throws {Error & { code: string }} on invalid arguments or DB failure
+ */
+async function updatePatientRecord(db, patient_id, date, results) {
+  // ── Guard clauses ──────────────────────────────────────────────────────
+  if (!db || typeof db.collection !== 'function') {
+    const err = new Error('MongoDB database handle is required');
+    err.code = 'INVALID_DB_HANDLE';
+    throw err;
+  }
+  if (typeof patient_id !== 'string' || patient_id.trim() === '') {
+    const err = new Error('patient_id is required and must be a string');
+    err.code = 'INVALID_PATIENT_ID';
+    throw err;
+  }
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    const err = new Error('date must be a valid YYYY-MM-DD string');
+    err.code = 'INVALID_DATE';
+    throw err;
+  }
+  if (!results || typeof results !== 'object' || Array.isArray(results)) {
+    const err = new Error('results must be a plain object');
+    err.code = 'INVALID_RESULTS';
+    throw err;
+  }
+
+  const normalised_id = patient_id.trim();
+  const filter = { patient_id: normalised_id, date };
+  const updateDoc = {
+    $set: {
+      ...results,
+      updatedAt: new Date().toISOString(),
+    },
+  };
+
+  console.log(JSON.stringify({
+    event: 'updatePatientRecord.start',
+    patient_id: normalised_id,
+    date,
+    fieldsToUpdate: Object.keys(results),
+  }));
+
+  let updatedDoc;
+  try {
+    const collection = db.collection('medicalNotes');
+    updatedDoc = await collection.findOneAndUpdate(filter, updateDoc, {
+      returnDocument: 'after',
+      includeResultMetadata: false,
+    });
+  } catch (err) {
+    console.error(JSON.stringify({
+      event: 'updatePatientRecord.error',
+      patient_id: normalised_id,
+      date,
+      message: err.message,
+    }));
+    const wrappedErr = new Error(
+      `DB update failed for patient_id=${patient_id} date=${date}: ${err.message}`
+    );
+    wrappedErr.code = 'DB_UPDATE_FAILED';
+    throw wrappedErr;
+  }
+
+  if (!updatedDoc) {
+    console.log(JSON.stringify({
+      event: 'updatePatientRecord.not_found',
+      patient_id: normalised_id,
+      date,
+    }));
+    return { status: 'not-found' };
+  }
+
+  console.log(JSON.stringify({
+    event: 'updatePatientRecord.complete',
+    patient_id: normalised_id,
+    date,
+    documentId: String(updatedDoc._id),
+  }));
+
+  return { status: 'updated', document: updatedDoc };
+}
+
 module.exports = {
   convertToJson,
-  fakeConvertToJson,  
+  fakeConvertToJson,
   addNote,
   listGeminiModels,
   connectMongo,
@@ -703,4 +921,7 @@ module.exports = {
   generateMongoQueryFromText,
   reformatResults,
   searchNotes,
+  normaliseDate,
+  validateUpdateRequest,
+  updatePatientRecord,
 };

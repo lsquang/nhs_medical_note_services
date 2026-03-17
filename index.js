@@ -4,7 +4,16 @@ require('dotenv').config({ override: true });
 
 const http = require('http');
 const url = require('url');
-const { addNote, listGeminiModels, searchNotes, connectMongo, mergePatientRecords } = require('./llmHelpers');
+const {
+    addNote,
+    listGeminiModels,
+    searchNotes,
+    connectMongo,
+    mergePatientRecords,
+    updatePatientRecord,
+    validateUpdateRequest,
+    normaliseDate,
+} = require('./llmHelpers');
 
 
 // In-memory storage for medical notes
@@ -240,31 +249,99 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Route: Update a patient record by patient_id + exact date
+    // Scope: MongoDB-backed only. Does not touch the in-memory medicalNotes array.
+    if (pathname === '/update-patient-record' && method === 'POST') {
+        console.log('Incoming POST /update-patient-record');
+        parseBody(req, async (error, data) => {
+            if (res.headersSent) return;
+
+            if (error) {
+                res.writeHead(400);
+                res.end(JSON.stringify({ success: false, message: 'Invalid JSON data' }));
+                return;
+            }
+
+            // Validate and normalise request payload
+            let patient_id, date, results;
+            try {
+                ({ patient_id, date, results } = validateUpdateRequest(data));
+            } catch (validationErr) {
+                res.writeHead(validationErr.statusCode || 400);
+                res.end(JSON.stringify({ success: false, message: validationErr.message }));
+                return;
+            }
+
+            let client = null;
+            try {
+                const connection = await connectMongo();
+                client = connection.client;
+
+                const result = await updatePatientRecord(connection.db, patient_id, date, results);
+
+                if (result.status === 'not-found') {
+                    res.writeHead(404);
+                    res.end(JSON.stringify({
+                        success: false,
+                        message: `No record found for patient_id="${patient_id}" on date="${date}"`,
+                    }));
+                    return;
+                }
+
+                res.writeHead(200);
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'Record updated successfully',
+                    data: result.document,
+                }));
+            } catch (err) {
+                console.error('updatePatientRecord error', err);
+                res.writeHead(500);
+                res.end(JSON.stringify({ success: false, message: err.message || 'Internal server error' }));
+            } finally {
+                if (client) {
+                    try {
+                        await client.close();
+                    } catch (closeErr) {
+                        console.error('Failed to close MongoDB client after update', closeErr);
+                    }
+                }
+            }
+        });
+        return;
+    }
+
     // Route not found
     res.writeHead(404);
-    res.end(JSON.stringify({ 
-        success: false, 
+    res.end(JSON.stringify({
+        success: false,
         message: 'Route not found',
         availableRoutes: [
             'POST /add-note - Add a new medical note',
             'GET /get-data - Get all notes or specific note by id query param',
             'POST /write-data - Update an existing note by id',
             'POST /query - Run LLM-generated MongoDB search and format results',
-            'POST /merge-patient-records - Validate merge contract and call MongoDB merge orchestrator'
+            'POST /merge-patient-records - Validate merge contract and call MongoDB merge orchestrator',
+            'POST /update-patient-record - Update a patient record by patient_id and date',
         ]
     }));
 });
 
-// Start server
-server.listen(PORT, () => {
-    console.log(`NHS Medical Note Services running on port ${PORT}`);
-    console.log(`\nAvailable endpoints:`);
-    console.log(`  POST http://localhost:${PORT}/add-note`);
-    console.log(`  GET  http://localhost:${PORT}/get-data`);
-    console.log(`  POST http://localhost:${PORT}/write-data`);
-    console.log(`  POST http://localhost:${PORT}/query`);
-    console.log(`  POST http://localhost:${PORT}/merge-patient-records`);
-});
+module.exports = { server };
+
+// Start server only when run directly (not when required by tests)
+if (require.main === module) {
+    server.listen(PORT, () => {
+        console.log(`NHS Medical Note Services running on port ${PORT}`);
+        console.log(`\nAvailable endpoints:`);
+        console.log(`  POST http://localhost:${PORT}/add-note`);
+        console.log(`  GET  http://localhost:${PORT}/get-data`);
+        console.log(`  POST http://localhost:${PORT}/write-data`);
+        console.log(`  POST http://localhost:${PORT}/query`);
+        console.log(`  POST http://localhost:${PORT}/merge-patient-records`);
+        console.log(`  POST http://localhost:${PORT}/update-patient-record`);
+    });
+}
 
 // Graceful shutdown
 process.on('SIGTERM', () => {
