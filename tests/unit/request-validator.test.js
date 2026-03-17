@@ -1,7 +1,7 @@
 'use strict';
 const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
-const { validateUpdateRequest } = require('../../llmHelpers');
+const { validateUpdateRequest } = require('../../src/llmHelpers');
 
 const BASE_VALID = {
   patient_id: 'JOHN_DOE',

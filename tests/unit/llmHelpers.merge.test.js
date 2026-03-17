@@ -5,7 +5,7 @@ const {
   findAllRecordsForPatient,
   mergePatientDocuments,
   mergePatientRecords,
-} = require('./llmHelpers');
+} = require('../../src/llmHelpers');
 
 function createFakeSession(failAtStep) {
   return {

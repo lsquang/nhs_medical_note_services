@@ -7,7 +7,7 @@ const { MongoClient } = require('mongodb');
 process.env.MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 process.env.MONGODB_DB  = 'nhs_test_update_feature';
 
-const { server } = require('../../index');
+const { server } = require('../../src/index');
 
 let baseUrl;
 let mongoClient;

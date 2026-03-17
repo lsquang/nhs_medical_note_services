@@ -1,7 +1,7 @@
 'use strict';
 const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert/strict');
-const { updatePatientRecord } = require('../../llmHelpers');
+const { updatePatientRecord } = require('../../src/llmHelpers');
 
 describe('updatePatientRecord', () => {
   let capturedFilter;

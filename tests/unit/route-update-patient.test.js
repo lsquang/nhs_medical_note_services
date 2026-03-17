@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 
 // Start the real HTTP server on an ephemeral port.
 // Validation errors (400s) fire before connectMongo is called, so no DB needed.
-const { server } = require('../../index');
+const { server } = require('../../src/index');
 
 let baseUrl;
 
